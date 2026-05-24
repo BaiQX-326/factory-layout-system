@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>工厂总平面布置交互系统 - 教学版 © ChrisChen</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { 
+            --bg-sidebar: #fdfdfd; 
+            --production: #FF9800; --auxiliary: #4CAF50; --warehouse: #F44336;
+            --power: #9C27B0; --water: #2196F3; --general: #607D8B;
+        }
+        body { margin: 0; font-family: 'Segoe UI', "Microsoft YaHei", sans-serif; display: flex; height: 100vh; background: #e9ecef; overflow: hidden; }
+        
+        #sidebar { width: 320px; background: var(--bg-sidebar); display: flex; flex-direction: column; border-right: 1px solid #dee2e6; box-shadow: 2px 0 5px rgba(0,0,0,0.02); z-index: 10; position: relative;}
+        .sb-header { padding: 20px; background: #fff; border-bottom: 1px solid #eee; color: #333; font-size: 18px; font-weight: bold; text-align: center; }
+        .scroll-area { flex: 1; overflow-y: auto; }
+        .cat-group { margin-bottom: 2px; }
+        .cat-title { padding: 10px 15px; background: #f8f9fa; font-size: 12px; font-weight: bold; color: #666; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; }
+        .item-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px; }
+        .build-btn { padding: 8px 4px; font-size: 11px; border: 1px solid #eee; background: white; cursor: pointer; border-radius: 4px; text-align: center; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 5px; color: #444; }
+        .build-btn:hover { border-color: #ccc; background: #f1f3f5; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+
+        /* 版权信息样式 */
+        .copyright {
+            padding: 12px 10px; background: #f8f9fa; border-top: 1px solid #dee2e6;
+            font-size: 11px; color: #868e96; text-align: center; line-height: 1.5;
+        }
+        .copyright em { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-style: italic; font-weight: 600; color: #495057; margin: 0 2px; }
+
+        #main { flex: 1; position: relative; display: flex; flex-direction: column; }
+        header { height: 60px; background: white; border-bottom: 1px solid #dee2e6; display: flex; align-items: center; padding: 0 20px; justify-content: space-between; }
+        #cv-container { flex: 1; display: flex; justify-content: center; align-items: center; background: #eaeff2; overflow: hidden; }
+        
+        .calc-panel { display: flex; gap: 8px; }
+        .calc-btn { 
+            padding: 8px 12px; background: #fff; border: 1px solid #ced4da; border-radius: 6px; 
+            font-size: 12px; font-weight: bold; color: #495057; cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: 0.2s; display: flex; align-items: center; gap: 5px;
+        }
+        .calc-btn:hover { background: #f8f9fa; transform: translateY(-1px); }
+        .btn-blue { color: #1864ab; border-color: #a5d8ff; background: #e7f5ff; }
+        .btn-green { color: #2b8a3e; border-color: #b2f2bb; background: #ebfbee; }
+        .btn-red { color: #c92a2a; border-color: #ffc9c9; background: #fff5f5; }
+        .btn-purple { color: #6741d9; border-color: #e5dbff; background: #f3f0ff; }
+        .btn-purple:hover { background: #e5dbff; border-color: #b197fc; }
+        .btn-danger { color: #fff; border-color: #e03131; background: #e03131; } 
+        .btn-danger:hover { background: #c92a2a; border-color: #c92a2a; color: #fff;}
+
+        .floating-panel {
+            position: absolute; right: 25px; width: 240px; 
+            background: rgba(255, 255, 255, 0.95); border-radius: 12px; padding: 15px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 1px solid #eee; z-index: 1000;
+        }
+
+        #wind-panel { top: 80px; }
+        #wind-chart { width: 100%; height: 180px; }
+        textarea { width: 100%; height: 40px; font-size: 11px; margin-top: 5px; border: 1px solid #ddd; padding: 5px; box-sizing: border-box; border-radius: 4px; resize: none;}
+
+        #task-panel { top: 380px; display: none; }
+        .task-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+        .task-btn { padding: 6px 0; background: #fff; border: 1px solid #adb5bd; border-radius: 4px; font-size: 11px; font-weight: bold; color: #495057; cursor: pointer; transition: 0.2s;}
+        .task-btn:hover { background: #495057; color: white; border-color: #495057;}
+
+        #inspect-panel {
+            position: absolute; top: 20px; left: 10px; right: 10px; bottom: 20px;
+            background: rgba(255, 255, 255, 0.96); border: 2px solid #ff8787; border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(201, 42, 42, 0.2); z-index: 100;
+            display: none; flex-direction: column; overflow: hidden; backdrop-filter: blur(5px);
+        }
+        .ip-header { background: #fff5f5; border-bottom: 1px solid #ffc9c9; padding: 12px; font-weight: bold; color: #c92a2a; display: flex; justify-content: space-between; align-items: center; }
+        .ip-close { cursor: pointer; color: #c92a2a; font-size: 16px; }
+        .ip-content { padding: 15px; flex: 1; overflow-y: auto; font-family: 'SimSun', '宋体', serif; color: red; font-size: 15px; line-height: 1.6; }
+        .ip-content ul { padding-left: 20px; margin: 0; }
+        .ip-content li { margin-bottom: 12px; }
+        .ip-pass { color: #2b8a3e; font-weight: bold; font-family: 'Microsoft YaHei', sans-serif; text-align: center; margin-top: 40px; font-size: 18px;}
+        .wind-info-text { font-family: 'Microsoft YaHei', sans-serif; font-size: 16px; font-weight: bold; color: #1864ab; margin-bottom: 8px; }
+
+        .modal-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3); z-index: 2000; display: none;
+            justify-content: center; align-items: center; backdrop-filter: blur(2px);
+        }
+        .modal-box {
+            width: 450px; padding: 20px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            position: relative; line-height: 1.6;
+        }
+        .modal-close { position: absolute; top: 12px; right: 15px; cursor: pointer; font-size: 18px; color: #555; }
+        
+        /* 区域弹窗（浅蓝背景，红色粗体） */
+        #region-box { background-color: #E3F2FD; border: 2px solid #90CAF9; }
+        #region-content { color: red; font-weight: bold; font-size: 15px; }
+
+        /* 任务弹窗（浅黄背景，黑色宋体） */
+        #task-box { background-color: #FFF9C4; border: 2px solid #FBC02D; }
+        #task-content { color: black; font-family: SimSun, serif; font-size: 15px; }
+
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div class="sb-header"><i class="fas fa-th-large" style="color:#666"></i> 建筑元素库</div>
+    <div class="scroll-area" id="menu-root"></div>
+    
+    <!-- 专属版权声明 -->
+    <div class="copyright">
+        © 2026 <em>ChrisChen</em>。版权所有，<br>未经许可禁止转载。
+    </div>
+
+    <!-- 审查报告面板 -->
+    <div id="inspect-panel">
+        <div class="ip-header">
+            <span><i class="fas fa-clipboard-list"></i> 平面布置审查报告</span>
+            <i class="fas fa-times ip-close" onclick="closeInspect()"></i>
+        </div>
+        <div class="ip-content" id="inspect-content"></div>
+    </div>
+</div>
+
+<div id="main">
+    <header>
+        <div>
+            <div style="font-weight: bold; color: #444; font-size: 16px;">工厂总平面布置交互系统</div>
+            <div style="font-size: 11px; color: #888;">按住 Shift 旋转吸附 90° | 教学模式下单/双击底图区域可查看详情</div>
+        </div>
+        <div class="calc-panel">
+            <button class="calc-btn btn-blue" onclick="calculateBuildingCoef()"><i class="fas fa-calculator"></i> 建筑系数</button>
+            <button class="calc-btn btn-green" onclick="calculateGreenRate()"><i class="fas fa-leaf"></i> 绿地率</button>
+            <button class="calc-btn btn-red" onclick="runInspection()"><i class="fas fa-stethoscope"></i> 检测</button>
+            <button class="calc-btn btn-purple" id="teach-btn" onclick="toggleTeachingMode()"><i class="fas fa-chalkboard-teacher"></i> 教学模式</button>
+        </div>
+    </header>
+    
+    <div id="cv-container">
+        <canvas id="factoryCanvas" width="1050" height="750"></canvas>
+    </div>
+    
+    <div id="wind-panel" class="floating-panel">
+        <div style="font-size: 13px; font-weight: bold; color:#333; margin-bottom: 5px;">玫瑰图风向频率</div>
+        <div id="wind-chart"></div>
+        <textarea id="windInput" oninput="updateChart()">10, 15, 25, 40, 35, 25, 18, 12, 10, 15, 25, 35, 50, 40, 25, 15</textarea>
+    </div>
+
+    <!-- 独立的任务按钮面板 -->
+    <div id="task-panel" class="floating-panel">
+        <div style="font-size: 13px; font-weight: bold; color:#F57F17; margin-bottom: 5px;"><i class="fas fa-tasks"></i> 布置任务指引</div>
+        <div class="task-grid">
+            <button class="task-btn" onclick="showTask(1)">任务一</button>
+            <button class="task-btn" onclick="showTask(2)">任务二</button>
+            <button class="task-btn" onclick="showTask(3)">任务三</button>
+            <button class="task-btn" onclick="showTask(4)">任务四</button>
+            <button class="task-btn" onclick="showTask(5)">任务五</button>
+        </div>
+    </div>
+
+    <!-- 弹窗：区域详情 -->
+    <div class="modal-overlay" id="region-modal">
+        <div class="modal-box" id="region-box">
+            <i class="fas fa-times modal-close" onclick="closeModal('region-modal')"></i>
+            <div style="font-size:18px; font-weight:bold; margin-bottom:10px; color:#1565C0;" id="region-title"></div>
+            <div id="region-content"></div>
+        </div>
+    </div>
+
+    <!-- 弹窗：任务详情 -->
+    <div class="modal-overlay" id="task-modal">
+        <div class="modal-box" id="task-box">
+            <i class="fas fa-times modal-close" onclick="closeModal('task-modal')"></i>
+            <div style="font-size:18px; font-weight:bold; margin-bottom:10px; color:#F57F17; font-family:SimSun;" id="task-title"></div>
+            <div id="task-content"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const regionData = {
+        '厂前区': '行政管理部门和后勤部门，如：办公大楼、食堂、医务室、车库、大门、传达室、中心实验室、技术管理部门等。',
+        '厂后区': '原料仓库、污水处理站、露天堆场、水处理设施等。',
+        '生产区': '主要生产车间及与生产车间联系紧密的辅助车间和少量动力车间厂房（空压机房、水塔、水泵房、变电站等）。',
+        '左侧区': '通常用于布置辅助车间或动力设施。',
+        '右侧区': '通常用于布置辅助车间或动力设施。'
+    };
+
+    const taskData = {
+        1: "（1）主生产车间建筑物的布置，要点：<br>①考虑布置在生产区的中心地带。<br>②其所在位置应当地势平坦。<br>③其朝向应当正面朝阳或偏南向布置。<br>④生产车间布置位置应以直通生活区和厂大门为宜。",
+        2: "（2）辅助车间建筑物的布置，要点：<br>①辅助车间建筑物等的位置应靠近其服务的主车间厂房或其服务对象的等距离处。<br>②可布置在厂区左侧或右侧处。",
+        3: "（3）动力车间(包括锅炉房、冷冻站、空压站、变电所等)建筑物的布置，要点：<br>①尽量靠近其服务的具体部门，可以大部集中布置在厂区左侧或右侧，少数也有布置在生产区内的。<br>②锅炉房还应布置在厂区的下风向。",
+        4: "（4）行政管理和后勤部门建筑设施的总体布置，要点：<br>①应集中在厂前区。<br>②多设置在工厂的大门处临近两侧。<br>③办公大楼要正对着入口并且附以大型花池绿化及侧旁美化，有体现厂址方位朝向的作用。",
+        5: "（5）全厂绿化布置，要点：<br>①全厂绿地率要达到15%。<br>②工厂大门两侧布置绿化。<br>③生产车间西侧布置绿化防西晒。<br>④散发有害气体、粉尘及产生噪音较大的建筑物周围需要布置绿化。<br>⑤厂区内道路两侧需布置绿化。<br>⑥食堂、厕所及员工宿舍周围需布置绿化。"
+    };
+
+    function showRegionModal(name) {
+        if(!regionData[name]) return;
+        document.getElementById('region-title').innerText = `【 ${name} 】布置指引`;
+        document.getElementById('region-content').innerHTML = regionData[name];
+        document.getElementById('region-modal').style.display = 'flex';
+    }
+
+    function showTask(id) {
+        document.getElementById('task-title').innerText = `【布置任务 ${id} 】`;
+        document.getElementById('task-content').innerHTML = taskData[id];
+        document.getElementById('task-modal').style.display = 'flex';
+    }
+
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    // ==========================================
+    const canvas = new fabric.Canvas('factoryCanvas', { backgroundColor: '#ffffff', preserveObjectStacking: true, stopContextMenu: true });
+
+    // 🌟 修复与改动：恢复为 mouse:down (单击) 事件，并精确遍历 subTargets
+    canvas.on('mouse:down', function(e) {
+        if (e.target && e.target.isTeachingBase) {
+            // 当点击底稿 Group 时，遍历其内部的 subTargets 
+            if (e.subTargets && e.subTargets.length > 0) {
+                for (let i = 0; i < e.subTargets.length; i++) {
+                    const sub = e.subTargets[i];
+                    // 只要点击到的元素（文字或矩形）带有 regionName 属性，就弹出对话框
+                    if (sub.regionName) {
+                        // 🌟 新增：增加白名单过滤，只有这三个区域的点击才弹窗
+                        const allowedRegions = ['厂前区', '厂后区', '生产区'];
+                        if (allowedRegions.includes(sub.regionName)) {
+                            showRegionModal(sub.regionName);
+                        }
+                        // 无论是否允许弹窗，找到目标就跳出循环
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    canvas.on('object:rotating', function(e) {
+        let obj = e.target;
+        if (obj.isTeachingBase) return; 
+        if (e.e.shiftKey) { obj.snapAngle = 90; obj.snapThreshold = 45; } 
+        else { obj.snapAngle = 0; obj.snapThreshold = 0; }
+        if (obj.linkedLabel) {
+            const center = obj.getCenterPoint();
+            obj.linkedLabel.set({ left: center.x, top: center.y });
+            obj.linkedLabel.bringToFront();
+        }
+    });
+
+    const config = [
+        { cat: "1. 生产车间", color: "#FF9800", icon: "fa-industry", items: ["生产车间", "实罐车间", "空罐车间", "糖果车间", "饼干车间", "面包车间", "奶粉车间", "炼乳车间", "消毒奶车间", "发酵车间", "浓缩汁车间", "脱水菜车间", "综合利用车间"] },
+        { cat: "2. 辅助车间", color: "#4CAF50", icon: "fa-flask", items: ["机修车间", "中心试验室", "化验室"] },
+        { cat: "3. 仓库设施", color: "#F44336", icon: "fa-boxes-stacked", items: ["原料库", "冷库", "包装材料库", "保温库", "成品库", "危险品库", "五金库", "各种堆场", "废品库", "车库"] },
+        { cat: "4. 动力设施", color: "#9C27B0", icon: "fa-bolt", items: ["发电间", "变电站", "锅炉房", "制冷机房", "空压机", "真空泵房"] },
+        { cat: "5. 供水设施", color: "#2196F3", icon: "fa-droplet", items: ["水泵房", "水处理设施", "水井", "水塔", "水池"] },
+        { cat: "6. 排水系统", color: "#2196F3", icon: "fa-faucet-drip", items: ["污水处理站"] },
+        { cat: "7. 全厂性设施", color: "#607D8B", icon: "fa-building", items: ["办公室", "食堂", "医务室", "厕所", "传达室", "汽车棚", "自行车棚", "厂大门", "围墙", "绿化", "花坛"] }
+    ];
+
+    const itemCategoryMap = {};
+    config.forEach(c => c.items.forEach(i => itemCategoryMap[i] = c.cat));
+
+    function createPattern(char, bg, fg) {
+        const pcv = fabric.util.createCanvasElement(); pcv.width = 40; pcv.height = 40;
+        const ctx = pcv.getContext('2d'); ctx.fillStyle = bg; ctx.fillRect(0,0,40,40);
+        ctx.fillStyle = fg; ctx.font = '22px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(char, 20, 22);
+        return new fabric.Pattern({ source: pcv, repeat: 'repeat' });
+    }
+
+    const menuRoot = document.getElementById('menu-root');
+    config.forEach(c => {
+        const group = document.createElement('div'); group.className = 'cat-group';
+        group.innerHTML = `<div class="cat-title"><i class="fas ${c.icon}" style="color:${c.color}"></i> ${c.cat}</div>`;
+        const grid = document.createElement('div'); grid.className = 'item-grid';
+        c.items.forEach(item => {
+            const btn = document.createElement('div'); btn.className = 'build-btn';
+            btn.innerHTML = `<i class="fas fa-plus" style="font-size:10px; opacity:0.3"></i> ${item}`;
+            btn.onclick = () => addBuilding(item, c.color);
+            grid.appendChild(btn);
+        });
+        group.appendChild(grid); menuRoot.appendChild(group);
+    });
+
+    function drawGridAndRulers() {
+        const step = 50;
+        canvas.add(new fabric.Rect({ left: 0, top: 0, width: 1050, height: 20, fill: '#f1f3f5', selectable: false, evented: false }));
+        canvas.add(new fabric.Rect({ left: 0, top: 0, width: 20, height: 750, fill: '#f1f3f5', selectable: false, evented: false }));
+        for(let i=0; i<=1050/step; i++){
+            canvas.add(new fabric.Line([i*step, 20, i*step, 750], { stroke: '#e9ecef', selectable: false, evented: false }));
+            if(i>0) canvas.add(new fabric.Text((i*step).toString(), { left: i*step + 2, top: 3, fontSize: 9, fill: '#868e96', selectable: false, evented: false }));
+        }
+        for(let i=0; i<=750/step; i++){
+            canvas.add(new fabric.Line([20, i*step, 1050, i*step], { stroke: '#e9ecef', selectable: false, evented: false }));
+            if(i>0) canvas.add(new fabric.Text((i*step).toString(), { left: 2, top: i*step + 2, fontSize: 9, fill: '#868e96', selectable: false, evented: false }));
+        }
+    }
+    drawGridAndRulers();
+
+    // ================= 教学模式：状态机与底稿系统 =================
+    let isTeachingMode = false;
+    let teachingBaseGroup = null;
+
+    function toggleTeachingMode() {
+        const btn = document.getElementById('teach-btn');
+        const taskPanel = document.getElementById('task-panel');
+
+        if (!isTeachingMode) {
+            if(confirm("开启教学模式将会在画布中生成厂区划分底稿，是否继续？")) {
+                isTeachingMode = true;
+                btn.innerHTML = '<i class="fas fa-sign-out-alt"></i> 退出教学模式';
+                btn.classList.replace('btn-purple', 'btn-danger');
+                taskPanel.style.display = 'block';
+
+                const W = 880, H = 495;
+                const leftW = 150, rightW = 150, midW = 580; 
+                const topH = 100, btmH = 100, midH = 295;    
+                
+                const rectOpt = { fill: 'rgba(255,255,255,0.7)', stroke: '#000', strokeWidth: 1, strokeUniform: true, hoverCursor: 'pointer' };
+                const textOpt = { fontFamily: 'Microsoft YaHei', fontWeight: 'bold', fill: '#808080', fontSize: 24, originX: 'center', originY: 'center' };
+
+                // 矩形和文字都被赋予了相同的 regionName 属性
+                const pRect = new fabric.Rect({ ...rectOpt, left: leftW, top: topH, width: midW, height: midH, regionName: '生产区' });
+                const pText = new fabric.Text('生产区', { ...textOpt, left: leftW + midW/2, top: topH + midH/2, regionName: '生产区' });
+
+                const fRect = new fabric.Rect({ ...rectOpt, left: leftW, top: 0, width: midW, height: topH, regionName: '厂前区' });
+                const fText = new fabric.Text('厂前区', { ...textOpt, left: leftW + midW/2, top: topH/2, regionName: '厂前区' });
+
+                const bRect = new fabric.Rect({ ...rectOpt, left: leftW, top: topH + midH, width: midW, height: btmH, regionName: '厂后区' });
+                const bText = new fabric.Text('厂后区', { ...textOpt, left: leftW + midW/2, top: topH + midH + btmH/2, regionName: '厂后区' });
+
+                const lRect = new fabric.Rect({ ...rectOpt, left: 0, top: 0, width: leftW, height: H, regionName: '左侧区' });
+                const lText = new fabric.Text('左侧区', { ...textOpt, left: leftW/2, top: H/2, angle: -90, regionName: '左侧区' });
+
+                const rRect = new fabric.Rect({ ...rectOpt, left: leftW + midW, top: 0, width: rightW, height: H, regionName: '右侧区' });
+                const rText = new fabric.Text('右侧区', { ...textOpt, left: leftW + midW + rightW/2, top: H/2, angle: 90, regionName: '右侧区' });
+
+                teachingBaseGroup = new fabric.Group([
+                    pRect, pText, fRect, fText, bRect, bText, lRect, lText, rRect, rText
+                ], {
+                    left: 100, top: 100,
+                    lockUniScaling: true, 
+                    subTargetCheck: true, 
+                    isTeachingBase: true,
+                    cornerColor: '#6741d9', borderColor: '#6741d9'
+                });
+
+                teachingBaseGroup.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false });
+                
+                canvas.add(teachingBaseGroup);
+                teachingBaseGroup.sendToBack(); 
+                canvas.renderAll();
+            }
+        } else {
+            isTeachingMode = false;
+            btn.innerHTML = '<i class="fas fa-chalkboard-teacher"></i> 教学模式';
+            btn.classList.replace('btn-danger', 'btn-purple');
+            
+            taskPanel.style.display = 'none';
+            closeModal('task-modal');
+            closeModal('region-modal');
+
+            if (teachingBaseGroup) {
+                if(canvas.getActiveObject() === teachingBaseGroup) canvas.discardActiveObject();
+                canvas.remove(teachingBaseGroup);
+                teachingBaseGroup = null;
+                canvas.renderAll();
+            }
+        }
+    }
+
+    // ================= 建筑交互逻辑 =================
+    function addBuilding(name, color) {
+        let shape;
+        const isGreen = name === "绿化";
+        const isFlower = name === "花坛";
+        const common = { left: 400, top: 300, stroke: '#333', strokeWidth: 2, objectCaching: false };
+
+        if (isGreen) shape = new fabric.Rect({ ...common, width: 140, height: 90, fill: createPattern('🌱','#E8F5E9','#4CAF50'), rx:10, ry:10 });
+        else if (isFlower) shape = new fabric.Rect({ ...common, width: 120, height: 70, fill: createPattern('✿','#FCE4EC','#E91E63'), rx:35, ry:35 });
+        else if (name === "厂大门") {
+            const p1 = new fabric.Rect({ width:14, height:14, fill:'#333', originX: 'center', originY: 'center', left: -45 });
+            const p2 = new fabric.Rect({ width:14, height:14, fill:'#333', originX: 'center', originY: 'center', left: 45 });
+            const line = new fabric.Line([-38, 0, 38, 0], { stroke:'#333', strokeDashArray:[5,3], strokeWidth: 2, originX: 'center', originY: 'center' });
+            shape = new fabric.Group([p1, p2, line], { left: 400, top: 300 });
+            shape.setControlsVisibility({ mt: false, mb: false, tl: false, tr: false, bl: false, br: false });
+        } else if (name === "围墙") {
+            shape = new fabric.Rect({ ...common, width: 350, height: 4, fill: '#555', strokeWidth: 0 });
+            shape.setControlsVisibility({ mt: false, mb: false, tl: false, tr: false, bl: false, br: false });
+        } else if (name.includes("棚")) shape = new fabric.Path('M 0 0 L 120 0 L 120 10 L 110 10 L 110 50 L 100 50 L 100 10 L 20 10 L 20 50 L 10 50 L 10 10 L 0 10 Z', { ...common, fill: color });
+        else if (name === "传达室") shape = new fabric.Path('M 0 30 L 55 0 L 110 30 L 110 80 L 0 80 Z', { ...common, fill: color });
+        else if (name.includes("水塔") || name.includes("水井")) shape = new fabric.Circle({ ...common, radius: 40, fill: color });
+        else shape = new fabric.Rect({ ...common, width: 120, height: 80, fill: color, rx: 8, ry: 8 });
+
+        shape.elementName = name;
+        shape.elementCategory = itemCategoryMap[name] || "其他";
+
+        let label = null;
+        if (!isGreen && !isFlower) {
+            label = new fabric.Text(name, { fontSize: 13, fill: '#000', fontWeight: 'bold', originX: 'center', originY: 'center', selectable: false, evented: false });
+            shape.linkedLabel = label;
+        }
+
+        canvas.add(shape);
+        if (label) canvas.add(label);
+
+        const sync = (obj) => {
+            if (obj.linkedLabel) {
+                const center = obj.getCenterPoint();
+                obj.linkedLabel.set({ left: center.x, top: center.y });
+                obj.linkedLabel.bringToFront();
+            }
+        };
+
+        shape.on('scaling', function() {
+            if (this.isTeachingBase) return;
+
+            if (name === "围墙" || name === "厂大门") this.set({ scaleY: 1 }); 
+            if (this.type === 'rect') {
+                this.set({ width: this.width * this.scaleX, height: this.height * this.scaleY, scaleX: 1, scaleY: 1 });
+                if (isFlower) this.set({ rx: this.height/2, ry: this.height/2 });
+            } else if (this.type === 'circle') this.set({ radius: this.radius * this.scaleX, scaleX: 1, scaleY: 1 });
+            else if (name === "厂大门") {
+                const newW = this.width * this.scaleX;
+                this.set({ width: newW, scaleX: 1, scaleY: 1 });
+                const halfW = newW / 2;
+                this.item(0).set({ left: -halfW + 7, scaleX: 1 });
+                this.item(1).set({ left: halfW - 7, scaleX: 1 });
+                this.item(2).set({ x1: -halfW + 14, x2: halfW - 14, scaleX: 1 });
+            }
+            sync(this);
+        });
+
+        shape.on('moving', () => sync(shape));
+        shape.on('mousedown', () => sync(shape));
+
+        if (label) sync(shape);
+        canvas.setActiveObject(shape);
+        canvas.renderAll();
+    }
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            const actives = canvas.getActiveObjects();
+            actives.forEach(obj => { if (obj.linkedLabel) canvas.remove(obj.linkedLabel); canvas.remove(obj); });
+            canvas.discardActiveObject().renderAll();
+        }
+    });
+
+    // ================= 图表与气象 =================
+    const chart = echarts.init(document.getElementById('wind-chart'));
+    function updateChart() {
+        const val = document.getElementById('windInput').value;
+        const data = val.split(',').map(v => parseFloat(v) || 0);
+        chart.setOption({
+            polar: { radius: '75%' },
+            angleAxis: { type: 'category', data: ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'], axisLabel: { fontSize: 8, color: '#555', fontWeight: 'bold' }, splitLine: { lineStyle: { color: 'rgba(0,0,0,0.08)' } } },
+            radiusAxis: { axisLabel: {show: false}, splitLine: { lineStyle: { color: 'rgba(0,0,0,0.05)', type:'dashed' } } },
+            series: [{ type: 'bar', data: data, coordinateSystem: 'polar', itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#F9D423' }, { offset: 1, color: '#FF4E50' }]), shadowBlur: 5, shadowColor: 'rgba(255, 78, 80, 0.3)' } }]
+        });
+    }
+    updateChart();
+
+    function getDominantWindInfo() {
+        const val = document.getElementById('windInput').value;
+        const data = val.split(',').map(v => parseFloat(v) || 0);
+        let maxIdx = 0, maxVal = -1;
+        for(let i=0; i<data.length; i++) { if(data[i] > maxVal) { maxVal = data[i]; maxIdx = i; } }
+        const dirs = ['北风(N)','东北偏北风(NNE)','东北风(NE)','东偏北风(ENE)','东风(E)','东南偏东风(ESE)','东南风(SE)','东南偏南风(SSE)','南风(S)','西南偏南风(SSW)','西南风(SW)','西偏南风(WSW)','西风(W)','西北偏西风(WNW)','西北风(NW)','西北偏北风(NNW)'];
+        return { angle: maxIdx * 22.5, name: dirs[maxIdx] }; 
+    }
+
+     // ================= 智能审查计算 =================
+    function getFactoryBounds() {
+        const walls = canvas.getObjects().filter(o => o.elementName === '围墙');
+        if (walls.length === 0) return null;
+        let minX = 99999, minY = 99999, maxX = -99999, maxY = -99999;
+        walls.forEach(w => {
+            const br = w.getBoundingRect();
+            if(br.left < minX) minX = br.left; if(br.top < minY) minY = br.top;
+            if(br.left + br.width > maxX) maxX = br.left + br.width; if(br.top + br.height > maxY) maxY = br.top + br.height;
+        });
+        return { minX, minY, maxX, maxY, w: maxX-minX, h: maxY-minY, area: (maxX-minX)*(maxY-minY) };
+    }
+
+    function getElementArea(obj) {
+        if(obj.type === 'circle') return Math.PI * obj.radius * obj.radius;
+        if(obj.type === 'rect') return obj.width * obj.height;
+        const br = obj.getBoundingRect(); return br.width * br.height;
+    }
+
+    function calculateBuildingCoef(silent = false) {
+        const bounds = getFactoryBounds();
+        if (!bounds) { if(!silent) alert("请先布置【围墙】以确定厂区边界！"); return -1; }
+        let area = 0;
+        canvas.getObjects().forEach(o => {
+            if (o.elementName && !o.elementName.includes('棚') && o.elementName !== '厂大门' && o.elementName !== '围墙' && o.elementName !== '绿化' && o.elementName !== '花坛') {
+                area += getElementArea(o);
+            }
+        });
+        const coef = (area / bounds.area) * 100;
+        if(!silent) alert(`建筑系数 = ${coef.toFixed(2)} %`);
+        return coef;
+    }
+
+    function calculateGreenRate(silent = false) {
+        const bounds = getFactoryBounds();
+        if (!bounds) { if(!silent) alert("请先布置【围墙】以确定厂区边界！"); return -1; }
+        let area = 0;
+        canvas.getObjects().forEach(o => { if (o.elementName === '绿化' || o.elementName === '花坛') area += getElementArea(o); });
+        const rate = (area / bounds.area) * 100;
+        if(!silent) alert(`绿地率 = ${rate.toFixed(2)} %`);
+        return rate;
+    }
+
+    function getDistance(o1, o2) {
+        const p1 = o1.getCenterPoint(), p2 = o2.getCenterPoint();
+        return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    }
+
+    function isUpwind(target, ref, windAngleDeg) {
+        const rad = windAngleDeg * Math.PI / 180; 
+        const upwindX = Math.sin(rad);     
+        const upwindY = -Math.cos(rad);    
+        const vx = target.getCenterPoint().x - ref.getCenterPoint().x;
+        const vy = target.getCenterPoint().y - ref.getCenterPoint().y;
+        return (upwindX * vx + upwindY * vy) > 0;
+    }
+
+    function closeInspect() { document.getElementById('inspect-panel').style.display = 'none'; }
+    
+    function runInspection() {
+        const panel = document.getElementById('inspect-panel');
+        const content = document.getElementById('inspect-content');
+        panel.style.display = 'flex';
+        
+        const windInfo = getDominantWindInfo();
+        const errors = [];
+        const bounds = getFactoryBounds();
+        
+        if(!bounds) { errors.push("未布置厂区【围墙】，无法界定厂区计算面积及相对位置。"); displayErrors(errors, windInfo.name); return; }
+
+        const objs = canvas.getObjects().filter(o => o.elementName);
+        const getByType = name => objs.filter(o => o.elementName === name);
+        const getByCat = cat => objs.filter(o => o.elementCategory === cat);
+
+        const productions = getByCat("1. 生产车间");
+        const DIST_CLOSE = 180, DIST_FAR = 400;
+
+        if (productions.length === 0) {
+            errors.push("未布置任何【生产车间】，无法进行方位参照检测。");
+        } else {
+            let cx = 0, cy = 0;
+            productions.forEach(p => { const c = p.getCenterPoint(); cx += c.x; cy += c.y; });
+            cx /= productions.length; cy /= productions.length;
+            if (cx < bounds.minX + bounds.w*0.25 || cx > bounds.maxX - bounds.w*0.25 || 
+                cy < bounds.minY + bounds.h*0.25 || cy > bounds.maxY - bounds.h*0.25) {
+                errors.push("1. 生产车间未处于厂区范围内的中心位置。");
+            }
+
+            const mechanics = getByType("机修车间");
+            if (mechanics.length > 0) {
+                let minD = Infinity;
+                mechanics.forEach(m => productions.forEach(p => minD = Math.min(minD, getDistance(m, p))));
+                if (minD > DIST_CLOSE) errors.push("2. 机修车间未靠近生产车间。");
+            } else errors.push("2. 未布置机修车间。");
+
+            const powers = getByCat("4. 动力设施");
+            if(powers.length > 0) {
+                let allValid = true;
+                powers.forEach(pw => {
+                    let minD = Infinity, isSide = false;
+                    const pwC = pw.getCenterPoint();
+                    productions.forEach(p => {
+                        minD = Math.min(minD, getDistance(pw, p));
+                        if (Math.abs(pwC.y - p.getCenterPoint().y) < 150) isSide = true; 
+                    });
+                    if (minD > DIST_CLOSE + 100 || !isSide) allValid = false;
+                });
+                if(!allValid) errors.push("3. 动力设施未布置在生产车间的左侧或者右侧，或不够靠近。");
+            } else errors.push("3. 未布置任何动力设施。");
+
+            const boilers = getByType("锅炉房");
+            boilers.forEach(b => {
+                let isUp = false, minD = Infinity;
+                productions.forEach(p => { 
+                    if(isUpwind(b, p, windInfo.angle)) isUp = true; 
+                    minD = Math.min(minD, getDistance(b,p));
+                });
+                if(isUp) errors.push("4. 锅炉房错误地布置在了生产车间的上风向区域。");
+                if(minD > DIST_FAR) errors.push("4. 锅炉房离生产车间的距离过远。");
+            });
+
+            const waste = getByType("污水处理站");
+            waste.forEach(w => {
+                let isUp = false, minD = Infinity;
+                productions.forEach(p => { 
+                    if(isUpwind(w, p, windInfo.angle)) isUp = true; 
+                    minD = Math.min(minD, getDistance(w,p));
+                });
+                if(isUp) errors.push("5. 污水处理站错误地布置在了生产车间的上风向区域。");
+                if(minD < DIST_FAR - 50) errors.push("5. 污水处理站距离生产车间不够远。");
+            });
+
+            const canteenToilet = [...getByType("食堂"), ...getByType("厕所")];
+            canteenToilet.forEach(ct => {
+                let isUp = false, minD = Infinity;
+                productions.forEach(p => { 
+                    if(isUpwind(ct, p, windInfo.angle)) isUp = true; 
+                    minD = Math.min(minD, getDistance(ct,p));
+                });
+                if(isUp) errors.push(`7. ${ct.elementName}错误地布置在了生产车间的上风向区域。`);
+                if(minD < DIST_CLOSE) errors.push(`7. ${ct.elementName}应远离生产车间。`);
+            });
+
+            const greens = getByType("绿化");
+            let hasSouthAndClose = false;
+            productions.forEach(p => {
+                greens.forEach(g => { 
+                    if(g.getCenterPoint().y > p.getCenterPoint().y && getDistance(g, p) < DIST_CLOSE) {
+                        hasSouthAndClose = true; 
+                    }
+                });
+            });
+            if(!hasSouthAndClose) errors.push("8. 生产车间的南侧未布置绿化，或绿化未紧邻生产车间。");
+        }
+
+        const freezers = getByType("制冷机房");
+        const coldStore = getByType("冷库");
+        if(freezers.length > 0 && coldStore.length > 0) {
+            let close = false;
+            freezers.forEach(f => coldStore.forEach(c => { if(getDistance(f,c) < DIST_CLOSE) close = true; }));
+            if(!close) errors.push("6. 制冷机房要靠近冷库。");
+        }
+        const rawStore = getByType("原料库");
+        const finStore = getByType("成品库");
+        if(rawStore.length > 0 && finStore.length > 0) {
+            let tooClose = false;
+            rawStore.forEach(r => finStore.forEach(f => { if(getDistance(r,f) < DIST_CLOSE) tooClose = true; }));
+            if(tooClose) errors.push("6. 原料库和成品库不能布置在一起。");
+        }
+
+        const gates = getByType("厂大门");
+        if (gates.length < 2) errors.push("12. 工厂大门个数不合规，应大于等于两个。");
+
+        const offices = getByType("办公室");
+        if(offices.length > 0 && gates.length > 0) {
+            offices.forEach(o => {
+                let isClose = false; gates.forEach(g => { if(getDistance(o,g) < DIST_FAR) isClose = true; });
+                if(!isClose) errors.push("9. 办公室应离工厂的大门较近。");
+                let hasFlower = false;
+                getByType("花坛").forEach(f => { if(f.getCenterPoint().y > o.getCenterPoint().y) hasFlower = true; });
+                if(!hasFlower) errors.push("9. 办公室前侧需要布置花坛。");
+            });
+
+            gates.forEach(g => {
+                const gx = g.getCenterPoint().x;
+                let hasLeft = false, hasRight = false;
+                getByType("绿化").forEach(gr => {
+                    if (Math.abs(gr.getCenterPoint().y - g.getCenterPoint().y) < 150) {
+                        if(gr.getCenterPoint().x < gx) hasLeft = true;
+                        if(gr.getCenterPoint().x > gx) hasRight = true;
+                    }
+                });
+                if(!hasLeft || !hasRight) errors.push("9. 在工厂的大门两侧需要布置绿化。");
+            });
+        } else if (offices.length === 0) errors.push("9. 未布置办公室。");
+
+        if(offices.length > 0) {
+            const labs = [...getByType("中心试验室"), ...getByType("化验室")];
+            if(labs.length > 0) {
+                let allClose = true;
+                labs.forEach(l => {
+                    let c = false; offices.forEach(o => { if(getDistance(l,o) < DIST_CLOSE) c = true; });
+                    if(!c) allClose = false;
+                });
+                if(!allClose) errors.push("10. 中心实验室和化验室应紧挨办公室布置。");
+            }
+        }
+
+        const bCoef = calculateBuildingCoef(true);
+        if(bCoef !== -1 && (bCoef < 35 || bCoef > 50)) errors.push(`11. 建筑系数(${bCoef.toFixed(1)}%)不合规，应在 35%~50% 之间。`);
+        const gRate = calculateGreenRate(true);
+        if(gRate !== -1 && (gRate < 15 || gRate > 20)) errors.push(`11. 绿地率(${gRate.toFixed(1)}%)不合规，应在 15%~20% 之间。`);
+
+        displayErrors(errors, windInfo.name);
+    }
+
+    function displayErrors(errors, windName) {
+        const content = document.getElementById('inspect-content');
+        let html = `<div class="wind-info-text"><i class="fas fa-flag"></i> 【环境基准】当前地区主导风向：${windName}</div>`;
+        html += `<hr style="border:none; border-bottom:1px dashed #ffa8a8; margin-bottom: 12px;">`;
+        if(errors.length === 0) {
+            html += `<div class="ip-pass"><i class="fas fa-check-circle"></i> 恭喜！当前厂区平面布置完全符合行业规范！</div>`;
+        } else {
+            html += '<ul>';
+            errors.forEach(err => html += `<li>${err}</li>`);
+            html += '</ul>';
+        }
+        content.innerHTML = html;
+    }
+</script>
+</body>
+</html>
